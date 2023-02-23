@@ -1,0 +1,17 @@
+[package]
+name = "cloth_sim"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fastrand = "1.8.0"
+olc-pge = "0.1.2"
+web-audio-api = "0.28.0"
+
+[profile.release]
+# lto = true
+# codegen-units = 1
+# opt-level = "z"
+# strip = true
