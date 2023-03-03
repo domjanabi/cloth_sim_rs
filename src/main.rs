@@ -113,6 +113,3 @@ struct Window
     avg_frame_time: f32,
     counter: usize,
 }
-
-
-
