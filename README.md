@@ -33,7 +33,10 @@ Additional keys:
 * [W] to delete all points _and_ sticks
 * [S] to make a point static
 * [D] to reverse [S]
-* and most importantly, **[G]** to generate a grid of connected points which forms a cloth
+* And most importantly, **[G]** to generate a grid of connected points which forms a cloth
+
+* There is also [T]. **Do not press it**. Ok, if you're feeling risky, i recommend trying it out when there are only around 5 dots on the screen.
+
 
 ### Compiling
 * Clone the repository
