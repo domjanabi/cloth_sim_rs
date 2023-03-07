@@ -12,12 +12,12 @@ pub enum Mode
     Force,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Point
 {
     pub pos: Vec2<f32>,
     pub prev: Vec2<f32>,
-    connection_count: u16,
+    connection_count: u32,
     pub is_static: bool,
 }
 
@@ -159,7 +159,7 @@ impl crate::Window
         }
         if pge.get_key(olc::Key::G).pressed
         {
-            self.generate_grid(64, 5.0);
+            self.generate_grid(64, 6.0);
         }
 
         if pge.get_key(olc::Key::Q).pressed
@@ -170,6 +170,10 @@ impl crate::Window
             println!("value of newstickstart: {:?}", self.newstickstart);
             println!("value of newstickend: {:?}", self.newstickend);
             println!("value of highlight: {:?}", self.closest_point);
+            if let Some(i) = self.closest_point
+            {
+                println!("{:?}", self.points[i]);
+            }
         }
         if pge.get_key(olc::Key::A).pressed
         {
@@ -319,8 +323,6 @@ impl crate::Window
                 let dot_indices = self.remove_stick(i);
                 self.orphans.push(dot_indices.0);
                 self.orphans.push(dot_indices.1);
-                self.orphans.push(dot_indices.2);
-                self.orphans.push(dot_indices.3);
                 self.counter += 1;
             }
             else
@@ -335,6 +337,8 @@ impl crate::Window
     pub fn delete_orphan_points(&mut self)
     {
         let mut i = 0;
+        self.orphans.sort();
+        self.orphans.dedup();
         while i != self.orphans.len()
         {
             let point = self.orphans[i];
@@ -567,8 +571,6 @@ impl crate::Window
                     let dot_indices = self.remove_stick(i);
                     self.orphans.push(dot_indices.0);
                     self.orphans.push(dot_indices.1);
-                    self.orphans.push(dot_indices.2);
-                    self.orphans.push(dot_indices.3);
                     self.counter += 1;
                 }
                 else
@@ -645,13 +647,13 @@ impl crate::Window
     }
 
     #[inline(never)]
-    pub fn remove_stick(&mut self, index: usize) -> (usize, usize, usize, usize)
+    pub fn remove_stick(&mut self, index: usize) -> (usize, usize)
     {
         let stick = self.sticks.swap_remove(index);
         let stick2 = self.stickscopy.swap_remove(index);
         self.points[stick.start].connection_count -= 1;
         self.points[stick.end].connection_count -= 1;
-        (stick.start, stick.end, stick2.start, stick2.end)
+        (stick.start, stick.end)
     }
     pub fn add_stick(&mut self, st: Stick)
     {

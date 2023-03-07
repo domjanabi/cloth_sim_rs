@@ -13,7 +13,7 @@ vek = {version = "0.15.10", features = ["repr_simd"]}
 web-audio-api = "0.28.0"
 
 [profile.release]
-#debug = true
+debug = true
 # lto = true
 # codegen-units = 1
 # opt-level = "z"

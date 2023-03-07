@@ -3,7 +3,7 @@ use olc_pge as olc;
 pub const CHANGE_STATE_RADIUS: f32 = 40.0;
 pub const CUT_RADIUS: f32 = 3.0;
 pub const POINT_RADIUS: f32 = 2.5;
-pub const HIGHLIGHT_RADIUS: f32 = 4.0;
+pub const HIGHLIGHT_RADIUS: f32 = 4.5;
 pub const FORCE: f32 = 5.0;
 pub const SNAP_RATIO: f32 = 3.0;
 

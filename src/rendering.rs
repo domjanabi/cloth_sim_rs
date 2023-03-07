@@ -95,18 +95,18 @@ impl crate::Window
         pge: &mut olc::PixelGameEngine,
     )
     {
-        let startx = (x - radius) as i32;
-        let starty = (y - radius) as i32;
-        let endx = (x + radius).ceil() as i32;
-        let endy = (y + radius).ceil() as i32;
+        let startx = (x - radius).floor() as i32 - 1;
+        let starty = (y - radius).floor() as i32 - 1;
+        let endx = (x + radius).ceil() as i32 + 1;
+        let endy = (y + radius).ceil() as i32 + 1;
         for i in starty..endy
         {
             for j in startx..endx
             {
-                let deltax = j - x as i32;
-                let deltay = i - y as i32;
+                let deltax = j as f32 - x;
+                let deltay = i  as f32 - y;
                 let dist2 = deltax * deltax + deltay * deltay;
-                if dist2 as f32 <= radius * radius
+                if dist2.sqrt() <= radius
                 {
                     pge.draw(j, i, colour);
                 }
