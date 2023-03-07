@@ -1,6 +1,7 @@
-use olc_pge as olc;
-use olc::Vf2d;
 use crate::constants::*;
+use olc_pge as olc;
+use rayon::{slice::ParallelSliceMut, prelude::ParallelIterator};
+use vek::vec2::Vec2;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode
@@ -14,8 +15,8 @@ pub enum Mode
 #[derive(Clone, Copy)]
 pub struct Point
 {
-    pub pos: Vf2d,
-    pub prev: Vf2d,
+    pub pos: Vec2<f32>,
+    pub prev: Vec2<f32>,
     connection_count: u16,
     pub is_static: bool,
 }
@@ -33,6 +34,7 @@ impl crate::Window
     //used verlet integration for this
     //https://youtu.be/3HjO_RGIjCU
     // ^ very useful link
+    #[inline(never)]
     pub fn simulate(
         &mut self,
         delta: f32,
@@ -42,48 +44,46 @@ impl crate::Window
     )
     {
         //moves points one time step further
-        for i in 0..self.points.len()
-        {
-            if !self.points[i].is_static
-            {
-                let p = &mut self.points[i];
-                let temp = p.pos;
-                p.pos += p.pos - p.prev;
-                p.pos += Vf2d::new(0.0, 1.0) * gravity * delta * delta;
-                p.prev = temp;
-                p.prev = p.pos + (p.prev - p.pos) * 0.999;
-            }
-        }
+        self.points.par_chunks_mut(200).for_each(|points| 
+                points.iter_mut().for_each(|p|
+                if !p.is_static
+                {
+                    let temp = p.pos;
+                    p.pos += p.pos - p.prev;
+                    p.pos += Vec2::new(0.0, 1.0) * gravity * delta * delta;
+                    p.prev = temp;
+                    p.prev = p.pos + (p.prev - p.pos) * 0.999;
+                }
+            )
+        );
 
         for _ in 0..iterations
         {
-            for i in 0..self.sticks.len()
-            {
-                let s = &mut self.sticks[i];
-                let scopy = &mut self.stickscopy[i];
-                let stickcentre = (self.points[s.start].pos + self.points[s.end].pos) / 2.0;
-                let stickdir = (self.points[s.start].pos - self.points[s.end].pos).norm();
-
-                //keeps points at constant distance from eachother,
-                //at least in theory. with less iterations it's bouncier
-                //with more iterations it becomes rigid
-                if !self.points[s.start].is_static
+            self.sticks.iter().zip(self.stickscopy.iter())
+            .for_each(|(s, scopy)|
                 {
-                    self.points[scopy.start].pos = stickcentre + stickdir * s.target_length / 2.0;
-                }
+                    let stickcentre = (self.points[s.start].pos + self.points[s.end].pos) / 2.0;
+                    let stickdir = (self.points[s.start].pos - self.points[s.end].pos).normalized();
 
-                if !self.points[s.end].is_static
-                {
-                    self.points[scopy.end].pos = stickcentre - stickdir * s.target_length / 2.0;
+                    //keeps points at constant distance from eachother,
+                    //at least in theory. with less iterations it's bouncier
+                    //with more iterations it becomes rigid
+                    if !self.points[s.start].is_static
+                    {
+                        self.points[scopy.start].pos = stickcentre + stickdir * s.target_length / 2.0;
+                    }
+
+                    if !self.points[s.end].is_static
+                    {
+                        self.points[scopy.end].pos = stickcentre - stickdir * s.target_length / 2.0;
+                    }    
                 }
-            }
+            );
             //swaps read and write buffers
             std::mem::swap(&mut self.sticks, &mut self.stickscopy);
             self.constrain_points(pge);
         }
     }
-
-    
 
     pub fn handle_fps(&mut self, fps: f32, elapsed_time: f32)
     {
@@ -92,8 +92,9 @@ impl crate::Window
             (1.0 / fps - self.avg_frame_time).max(0.0),
         ));
         self.smoothdelta = (self.smoothdelta + elapsed_time * 0.1) / 1.1;
-    }    
+    }
 
+    #[inline(never)]
     pub fn handle_input(&mut self, pge: &mut olc::PixelGameEngine)
     {
         if !((self.currentmode == Mode::Hand) && pge.get_mouse(0).held)
@@ -106,10 +107,11 @@ impl crate::Window
         {
             if let Some(closest) = self.closest_point
             {
-                let nearmouse = (self.points[closest].pos
-                    - Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32))
-                .mag2()
-                    < CHANGE_STATE_RADIUS;
+                let dist2 = 
+                (self.points[closest].pos - Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32))
+                .magnitude_squared();
+                let nearmouse = dist2 < CHANGE_STATE_RADIUS;
+                
                 self.points[closest].is_static = if nearmouse
                 {
                     true
@@ -124,10 +126,11 @@ impl crate::Window
         {
             if let Some(closest) = self.closest_point
             {
-                let nearmouse = (self.points[closest].pos
-                    - Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32))
-                .mag2()
-                    < CHANGE_STATE_RADIUS;
+                let dist2 = 
+                (self.points[closest].pos - Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32))
+                .magnitude_squared();
+                let nearmouse = dist2 < CHANGE_STATE_RADIUS;
+
                 self.points[closest].is_static = if nearmouse
                 {
                     false
@@ -231,13 +234,18 @@ impl crate::Window
             {
                 if i != j
                 {
-                    let stick = Stick{start: i, end: j, target_length: (self.points[i].pos - self.points[j].pos).mag()};
+                    let stick = Stick {
+                        start: i,
+                        end: j,
+                        target_length: (self.points[i].pos - self.points[j].pos).magnitude(),
+                    };
                     self.add_stick(stick)
                 }
-            }    
+            }
         }
     }
 
+    #[inline(never)]
     //generates a grid that acts like cloth
     pub fn generate_grid(&mut self, dim: u32, stepsize: f32) // 20.0
     {
@@ -246,7 +254,7 @@ impl crate::Window
         {
             for j in 0..dim
             {
-                let temp = Vf2d::new(20.0 + j as f32 * stepsize, 20.0 + i as f32 * stepsize);
+                let temp = Vec2::new(20.0 + j as f32 * stepsize, 20.0 + i as f32 * stepsize);
                 let should_be_static = i == 0 && (j % 4 == 0 || j == dim - 1);
                 self.points.push(Point {
                     pos: temp,
@@ -254,7 +262,6 @@ impl crate::Window
                     is_static: should_be_static,
                     connection_count: 0,
                 });
-
             }
         }
         for i in 0..dim - 1
@@ -267,13 +274,13 @@ impl crate::Window
                 self.add_stick(Stick {
                     start: s,
                     end: e1,
-                    target_length: (self.points[s].pos - self.points[e1].pos).mag(),
+                    target_length: (self.points[s].pos - self.points[e1].pos).magnitude(),
                 });
                 let e2 = initial_size + ((i + 1) * dim + j) as usize;
                 self.add_stick(Stick {
                     start: s,
                     end: e2,
-                    target_length: (self.points[s].pos - self.points[e2].pos).mag(),
+                    target_length: (self.points[s].pos - self.points[e2].pos).magnitude(),
                 });
             }
         }
@@ -284,144 +291,165 @@ impl crate::Window
             self.add_stick(Stick {
                 start: s,
                 end: e,
-                target_length: (self.points[s].pos - self.points[e].pos).mag(),
+                target_length: (self.points[s].pos - self.points[e].pos).magnitude(),
             });
             s = initial_size + (dim * (dim - 1) + i) as usize;
             e = initial_size + (dim * (dim - 1) + i + 1) as usize;
             self.add_stick(Stick {
                 start: s,
                 end: e,
-                target_length: (self.points[s].pos - self.points[e].pos).mag(),
+                target_length: (self.points[s].pos - self.points[e].pos).magnitude(),
             });
         }
     }
 
     //snaps all sticks that become too long
+    #[inline(never)]
     pub fn snap_apart_too_long_sticks(&mut self)
     {
-        let mut potentially_lone_dots = Vec::new();
+        assert!(self.orphans.is_empty());
         let mut i = 0;
+        
         while i != self.sticks.len()
         {
             let current_length =
-                (self.points[self.sticks[i].start].pos - self.points[self.sticks[i].end].pos).mag();
+                (self.points[self.sticks[i].start].pos - self.points[self.sticks[i].end].pos).magnitude();
             if current_length / self.sticks[i].target_length > SNAP_RATIO
             {
                 let dot_indices = self.remove_stick(i);
-                potentially_lone_dots.push(dot_indices.0);
-                potentially_lone_dots.push(dot_indices.1);
-                potentially_lone_dots.push(dot_indices.2);
-                potentially_lone_dots.push(dot_indices.3);
-                i -= 1;
+                self.orphans.push(dot_indices.0);
+                self.orphans.push(dot_indices.1);
+                self.orphans.push(dot_indices.2);
+                self.orphans.push(dot_indices.3);
                 self.counter += 1;
             }
-            i += 1;
+            else
+            {
+                i += 1;
+            }
         }
-        self.delete_orphan_points(&mut potentially_lone_dots);
+        self.delete_orphan_points();
     }
 
-    pub fn delete_orphan_points(&mut self, potential_orphans: &mut[usize])
+    #[inline(never)]
+    pub fn delete_orphan_points(&mut self)
     {
         let mut i = 0;
-        while i != potential_orphans.len()
+        while i != self.orphans.len()
         {
-            let point = potential_orphans[i];
-            let remove = self.points[point].connection_count == 0;
+            let point = self.orphans[i];
+            let remove = match self.points.get(point)
+            {
+                Some(p) => p.connection_count == 0,
+                None => false,
+            };
             if remove
             {
                 if self.points.len() == 0
                 {
                     return;
                 }
-                self.points.remove(point);
+                self.points.swap_remove(point);
                 self.closest_point = None;
                 if let Some(p) = self.closest_point
                 {
-                    if p > point
+                    if p == self.points.len() && !self.points.is_empty()
                     {
-                        self.closest_point = Some(p - 1);
+                        self.closest_point = Some(point);
                     }
                     if p == point
                     {
                         self.closest_point = None;
                     }
                 }
-                for stick in self.sticks.iter_mut().chain(self.stickscopy.iter_mut())
-                {
-                    for idx in [&mut stick.start, &mut stick.end]
+                self.sticks.par_chunks_mut(200).chain(self.stickscopy.par_chunks_mut(200)).for_each(|sticks|
                     {
-                        if *idx >= point
-                        {
-                            *idx = (*idx).max(1) - 1;
-                        }
+                        sticks.iter_mut().for_each(|stick|
+
+                            for idx in [&mut stick.start, &mut stick.end]
+                            {
+                                if *idx == self.points.len()
+                                {
+                                    *idx = point;
+                                }
+                            }
+                        )
                     }
-                }
+                );
                 let mut j = 0;
-                while j != potential_orphans.len()
+                while j != self.orphans.len()
                 {
-                    if potential_orphans[j] >= point
+                    if self.orphans[j] == self.points.len()
                     {
-                        potential_orphans[j] = potential_orphans[j].max(1) - 1;
+                        self.orphans[j] = point;
                     }
                     j += 1;
                 }
             }
             i += 1;
         }
+        self.orphans.clear();
     }
 
+    #[inline(never)]
     //bounces the points off the window borders
     pub fn constrain_points(&mut self, pge: &mut olc::PixelGameEngine)
     {
-        for i in 0..self.points.len()
-        {
-            let mut p = self.points[i];
-            let vel = p.pos - p.prev;
-            let sw = pge.screen_width() as f32;
-            let sh = pge.screen_height() as f32;
-            if p.pos.x > sw - POINT_RADIUS
-            {
-                p.pos.x = sw - POINT_RADIUS;
-                p.prev.x = p.pos.x + vel.x.abs();
-            }
-            else if p.pos.x < POINT_RADIUS
-            {
-                p.pos.x = POINT_RADIUS;
-                p.prev.x = p.pos.x - vel.x.abs();
-            }
-            if p.pos.y > sh - POINT_RADIUS
-            {
-                p.pos.y = sh - POINT_RADIUS;
-                p.prev.y = p.pos.y + vel.y.abs();
-            }
-            else if p.pos.y < POINT_RADIUS
-            {
-                p.pos.y = POINT_RADIUS;
-                p.prev.y = p.pos.y - vel.y.abs();
-            }
-            self.points[i] = p;
-        }
+        let sw = pge.screen_width() as f32;
+        let sh = pge.screen_height() as f32;
+        self.points.par_chunks_mut(200).for_each(|points|
+            points.iter_mut().for_each(|point|
+                {
+                    let mut p = *point;
+                    let vel = p.pos - p.prev;
+                    
+                    if p.pos.x > sw - POINT_RADIUS
+                    {
+                        p.pos.x = sw - POINT_RADIUS;
+                        p.prev.x = p.pos.x + vel.x.abs();
+                    }
+                    else if p.pos.x < POINT_RADIUS
+                    {
+                        p.pos.x = POINT_RADIUS;
+                        p.prev.x = p.pos.x - vel.x.abs();
+                    }
+                    if p.pos.y > sh - POINT_RADIUS
+                    {
+                        p.pos.y = sh - POINT_RADIUS;
+                        p.prev.y = p.pos.y + vel.y.abs();
+                    }
+                    else if p.pos.y < POINT_RADIUS
+                    {
+                        p.pos.y = POINT_RADIUS;
+                        p.prev.y = p.pos.y - vel.y.abs();
+                    }
+                    *point = p;
+                }
+            )
+        );
     }
 
+    #[inline(never)]
     //gets the distance between a line segment (aka Stick), and a point
-    pub fn distance(&self, st: Stick, pt: Vf2d) -> f32
+    pub fn distance(&self, st: Stick, pt: Vec2<f32>) -> f32
     {
         let a = self.points[st.start].pos;
         let b = self.points[st.end].pos;
 
         //length squared
-        let l2 = (a - b).mag2();
+        let l2 = (a - b).magnitude_squared();
         if l2 < 0.001
         {
-            return (a - pt).mag();
+            return (a - pt).magnitude_squared();
         }
-        let t = 0.0f32.max(1.0f32.min((pt - a).dot(&(b - a)) / l2));
+        let t = 0.0f32.max(1.0f32.min((pt - a).dot(b - a) / l2));
         let projection = a + (b - a) * t;
-        (pt - projection).mag()
+        (pt - projection).magnitude()
     }
 
+    #[inline(never)]
     //returns whether two line segments intersect or not
-    pub fn intersects(start1: Vf2d, end1: Vf2d, start2: Vf2d, end2: Vf2d) -> bool
+    pub fn intersects(start1: Vec2<f32>, end1: Vec2<f32>, start2: Vec2<f32>, end2: Vec2<f32>) -> bool
     {
         //t=
         //(x1-x3)(y3-y4) - (y1-y3)(x3-x4)
@@ -438,7 +466,7 @@ impl crate::Window
         let c = start2;
         let d = end2;
 
-        let mag = (start2 - end2).mag();
+        let mag = (start2 - end2).magnitude();
 
         let x12 = a.x - b.x;
         let y12 = a.y - b.y;
@@ -449,7 +477,7 @@ impl crate::Window
 
         let mut t = x13 * y34 - y13 * x34;
         t /= x12 * y34 - y12 * x34;
-        let range = -0.0 - 1.0/mag..=1.0 + 1.0 / mag;
+        let range = -0.0 - 1.0 / mag..=1.0 + 1.0 / mag;
         if !range.contains(&t)
         {
             return false;
@@ -463,6 +491,7 @@ impl crate::Window
         true
     }
 
+    #[inline(never)]
     //-1 when no points exist
     pub fn get_closest_point(&mut self, x: f32, y: f32) -> Option<usize>
     {
@@ -471,16 +500,17 @@ impl crate::Window
             return None;
         }
         let mut out = 0;
-        let pos = Vf2d { x, y };
+        let pos = Vec2 { x, y };
         for i in 0..self.points.len()
         {
-            if (pos - self.points[i].pos).mag2() < (pos - self.points[out].pos).mag2()
+            if (pos - self.points[i].pos).magnitude_squared() < (pos - self.points[out].pos).magnitude_squared()
             {
                 out = i;
             }
         }
         Some(out)
     }
+
 
     pub fn move_point(&mut self, pge: &mut olc::PixelGameEngine)
     {
@@ -489,26 +519,28 @@ impl crate::Window
             if let Some(closest) = self.closest_point
             {
                 self.points[closest].pos =
-                    Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+                    Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
             }
         }
     }
+
+    #[inline(never)]
     //can leave orphan points that bounce around
     pub fn cut_sticks(&mut self, pge: &mut olc::PixelGameEngine)
     {
-        let mut potentially_lone_dots = Vec::new();
+        assert!(self.orphans.is_empty());
         if pge.get_mouse(0).held
         {
-            let current_mouse_pos = Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+            let current_mouse_pos = Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
             let mouse_delta = current_mouse_pos - self.previous_mouse_pos;
             let mut i = 0;
             while i != self.sticks.len()
             {
-                //switches between cutting by removing nearby sticks (when mouse moves slowly), 
+                //switches between cutting by removing nearby sticks (when mouse moves slowly),
                 //and cutting by intersecting the mouse's movement vector with the stick (when mouse moves quickly)
-                if mouse_delta.mag() < CUT_RADIUS * 2.0
+                if mouse_delta.magnitude() < CUT_RADIUS * 2.0
                 {
-                    let mousepos = Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+                    let mousepos = Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
                     if self.distance(self.sticks[i], mousepos) >= CUT_RADIUS
                     {
                         i += 1;
@@ -526,20 +558,17 @@ impl crate::Window
                     continue;
                 }
                 //moves points a bit when cutting them apart
-                let vel =
-                    self.points[self.sticks[i].end].pos - self.points[self.sticks[i].end].prev;
+                let vel = self.points[self.sticks[i].end].pos - self.points[self.sticks[i].end].prev;
                 let relative_vel = mouse_delta - vel;
-                self.points[self.sticks[i].start].pos +=
-                    relative_vel.norm() / relative_vel.mag2().max(1.0).min(30.0) * 10.0;
-                self.points[self.sticks[i].end].pos +=
-                    relative_vel.norm() / relative_vel.mag2().max(1.0).min(30.0) * 10.0;
-                if relative_vel.mag() > 3.0
+                self.points[self.sticks[i].start].pos += relative_vel.normalized() / relative_vel.magnitude_squared().max(1.0).min(30.0) * 10.0;
+                self.points[self.sticks[i].end].pos += relative_vel.normalized() / relative_vel.magnitude_squared().max(1.0).min(30.0) * 10.0;
+                if relative_vel.magnitude_squared() > 9.0
                 {
                     let dot_indices = self.remove_stick(i);
-                    potentially_lone_dots.push(dot_indices.0);
-                    potentially_lone_dots.push(dot_indices.1);
-                    potentially_lone_dots.push(dot_indices.2);
-                    potentially_lone_dots.push(dot_indices.3);
+                    self.orphans.push(dot_indices.0);
+                    self.orphans.push(dot_indices.1);
+                    self.orphans.push(dot_indices.2);
+                    self.orphans.push(dot_indices.3);
                     self.counter += 1;
                 }
                 else
@@ -548,14 +577,15 @@ impl crate::Window
                 }
             }
         }
-        
-        self.delete_orphan_points(&mut potentially_lone_dots);
+
+        self.delete_orphan_points();
     }
+
     pub fn spawn_point(&mut self, pge: &mut olc::PixelGameEngine)
     {
         if pge.get_mouse(0).pressed
         {
-            let temp = Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+            let temp = Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
             self.points.push(Point {
                 pos: temp,
                 prev: temp,
@@ -564,45 +594,21 @@ impl crate::Window
             });
         }
     }
+
+    #[inline(never)]
     pub fn apply_force(&mut self, pge: &mut olc::PixelGameEngine)
     {
         if pge.get_mouse(0).held
         {
-            let mp = Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+            let mp = Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
             for i in 0..self.points.len()
             {
                 if !self.points[i].is_static
                 {
                     let p = &mut self.points[i];
                     let dir = mp - p.pos;
-                    p.pos += dir.norm() / (dir.mag() + 0.5) * FORCE;
-                }
-            }
-        }
-    }
-
-    //there is a function for doing this in olc::PGE,
-    //but it takes in integers for position,
-    //which means that it's not actually a circle rendered in low res,
-    //but more of a "texture", as there is only one shape the circle can have.
-    //replace fillCircle() with FillCircle() calls,
-    //and you might see the difference yourself
-    pub fn fill_circle(x: f32, y: f32, radius: f32, colour: olc::Pixel, pge: &mut olc::PixelGameEngine)
-    {
-        let startx = (x - radius) as i32;
-        let starty = (y - radius) as i32;
-        let endx = (x + radius).ceil() as i32;
-        let endy = (y + radius).ceil() as i32;
-        for i in starty..endy
-        {
-            for j in startx..endx
-            {
-                let deltax = j - x as i32;
-                let deltay = i - y as i32;
-                let dist2 = deltax * deltax + deltay * deltay;
-                if dist2 as f32 <= radius * radius
-                {
-                    pge.draw(j, i, colour);
+                    let (norm, mag) = dir.normalized_and_get_magnitude();
+                    p.pos += norm / (mag + 0.5) * FORCE;
                 }
             }
         }
@@ -625,7 +631,7 @@ impl crate::Window
             {
                 if self.newstickstart != self.newstickend
                 {
-                    let len = (self.points[newstart].pos - self.points[newend].pos).mag();
+                    let len = (self.points[newstart].pos - self.points[newend].pos).magnitude();
                     self.add_stick(Stick {
                         start: newstart,
                         end: newend,
@@ -638,10 +644,11 @@ impl crate::Window
         }
     }
 
+    #[inline(never)]
     pub fn remove_stick(&mut self, index: usize) -> (usize, usize, usize, usize)
     {
-        let stick = self.sticks.remove(index);
-        let stick2 = self.stickscopy.remove(index);
+        let stick = self.sticks.swap_remove(index);
+        let stick2 = self.stickscopy.swap_remove(index);
         self.points[stick.start].connection_count -= 1;
         self.points[stick.end].connection_count -= 1;
         (stick.start, stick.end, stick2.start, stick2.end)
@@ -650,7 +657,7 @@ impl crate::Window
     {
         self.sticks.push(st);
         self.stickscopy.push(st);
-        self.points[st.start].connection_count+=1;
-        self.points[st.end].connection_count+=1;
+        self.points[st.start].connection_count += 1;
+        self.points[st.end].connection_count += 1;
     }
 }

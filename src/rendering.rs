@@ -1,23 +1,19 @@
-use olc_pge as olc;
-use crate::Mode;
 use crate::constants::*;
+use crate::Mode;
+use olc_pge as olc;
 
 impl crate::Window
 {
+    #[inline(never)]
     pub fn render(&mut self, pge: &mut olc::PixelGameEngine)
     {
-        if EXPENSIVE_POINT_RENDERING
-        {
-            self.render_points(pge);
-        }
+        pge.clear(olc::Pixel::rgb(33, 36, 30));
         self.render_sticks(pge);
-        if !EXPENSIVE_POINT_RENDERING
-        {
-            self.render_points(pge);
-        }
+        self.render_points(pge);
 
         self.render_mode_symbol(pge);
     }
+
 
     pub fn render_mode_symbol(&mut self, pge: &mut olc::PixelGameEngine)
     {
@@ -59,42 +55,24 @@ impl crate::Window
         }
     }
 
+    #[inline(never)]
     pub fn render_points(&mut self, pge: &mut olc::PixelGameEngine)
     {
-        if EXPENSIVE_POINT_RENDERING
+        for i in 0..self.points.len()
         {
-            for i in 0..self.points.len()
+            let pos = self.points[i].pos;
+            if Some(i) != self.closest_point
             {
-                let pos = self.points[i].pos;
-                if Some(i) != self.closest_point
-                {
-                    Self::fill_circle(pos.x, pos.y, POINT_RADIUS, POINT_COLOUR, pge);
-                }
-                else
-                {
-                    //renders closest point to mouse highlighted
-                    Self::fill_circle(pos.x, pos.y, HIGHLIGHT_RADIUS, HIGHLIGHT_COLOUR, pge);
-                    Self::fill_circle(pos.x, pos.y, POINT_RADIUS, POINT_COLOUR, pge);
-                }
+                pge.draw(pos.x as i32, pos.y as i32, POINT_COLOUR);
             }
-        }
-        else
-        {
-            for i in 0..self.points.len()
+            else
             {
-                let pos = self.points[i].pos;
-                if Some(i) != self.closest_point
-                {
-                    pge.draw(pos.x as i32, pos.y as i32, POINT_COLOUR);
-                }
-                else
-                {
-                    pge.fill_circle(pos.x as i32, pos.y as i32, 2, HIGHLIGHT_COLOUR);
-                }
+                Self::fill_circle(pos.x, pos.y, 2.0, HIGHLIGHT_COLOUR, pge);
             }
         }
     }
-    
+
+    #[inline(never)]
     pub fn render_sticks(&self, pge: &mut olc::PixelGameEngine)
     {
         for stick in self.sticks.iter()
@@ -106,6 +84,33 @@ impl crate::Window
                 self.points[stick.end].pos.y as i32,
                 STICK_COLOUR,
             );
+        }
+    }
+    #[inline(never)]
+    pub fn fill_circle(
+        x: f32,
+        y: f32,
+        radius: f32,
+        colour: olc::Pixel,
+        pge: &mut olc::PixelGameEngine,
+    )
+    {
+        let startx = (x - radius) as i32;
+        let starty = (y - radius) as i32;
+        let endx = (x + radius).ceil() as i32;
+        let endy = (y + radius).ceil() as i32;
+        for i in starty..endy
+        {
+            for j in startx..endx
+            {
+                let deltax = j - x as i32;
+                let deltay = i - y as i32;
+                let dist2 = deltax * deltax + deltay * deltay;
+                if dist2 as f32 <= radius * radius
+                {
+                    pge.draw(j, i, colour);
+                }
+            }
         }
     }
 }

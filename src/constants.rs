@@ -20,17 +20,7 @@ pub const HIGHLIGHT_COLOUR: olc::Pixel = olc::Pixel {
     a: 255,
 };
 
-pub const EXPENSIVE_POINT_RENDERING: bool = false;
-pub const POINT_COLOUR: olc::Pixel = if EXPENSIVE_POINT_RENDERING
-{
-    olc::Pixel {
-        r: 150,
-        g: 110,
-        b: 40,
-        a: 255,
-    }
-}
-else
+pub const POINT_COLOUR: olc::Pixel =
 {
     olc::Pixel {
         r: 240,

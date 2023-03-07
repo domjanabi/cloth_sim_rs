@@ -8,10 +8,16 @@ edition = "2021"
 [dependencies]
 fastrand = "1.8.0"
 olc-pge = "0.1.2"
+rayon = "1.7.0"
+vek = {version = "0.15.10", features = ["repr_simd"]}
 web-audio-api = "0.28.0"
 
 [profile.release]
+#debug = true
 # lto = true
 # codegen-units = 1
 # opt-level = "z"
 # strip = true
+
+#77824
+#

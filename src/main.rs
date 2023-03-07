@@ -1,12 +1,12 @@
-use olc::Vf2d;
+use vek::vec::Vec2;
 use olc_pge as olc;
 pub use web_audio_api::context::{AudioContext, BaseAudioContext};
 pub use web_audio_api::node::{AudioNode, AudioScheduledSourceNode};
 
 pub mod audio;
 pub mod constants;
-pub mod rendering;
 pub mod logic;
+pub mod rendering;
 use logic::*;
 
 fn main()
@@ -33,7 +33,6 @@ impl olc::PGEApplication for Window
     {
         let fps = 60.0;
         self.handle_fps(fps, elapsed_time);
-        pge.clear(olc::Pixel::rgb(33, 36, 30));
 
         self.handle_input(pge);
         match self.currentmode
@@ -49,12 +48,15 @@ impl olc::PGEApplication for Window
         {
             self.simulate(1.0 / 100.0, 8, 200.0, pge);
         }
-
+        if pge.get_key(olc::Key::Escape).held
+        {
+            return false;
+        }
         self.snap_apart_too_long_sticks();
         self.render(pge);
         self.play_sfx();
 
-        self.previous_mouse_pos = Vf2d::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
+        self.previous_mouse_pos = Vec2::new(pge.get_mouse_x() as f32, pge.get_mouse_y() as f32);
 
         true
     }
@@ -64,17 +66,17 @@ impl Window
 {
     fn new(audio_context: AudioContext) -> Window
     {
-        Window
-        {
+        Window {
             smoothdelta: 0.1,
-            previous_mouse_pos: Vf2d::new(0.0, 0.0),
+            previous_mouse_pos: Vec2::new(0.0, 0.0),
             //indices for creating new sticks
             newstickstart: None,
             newstickend: None,
             //index to the point closest to the mouse
             closest_point: None,
-    
+
             points: vec![],
+            orphans: vec![],
             //write buffer
             sticks: vec![],
             // ^
@@ -92,7 +94,7 @@ impl Window
 
 struct Window
 {
-    previous_mouse_pos: Vf2d,
+    previous_mouse_pos: Vec2<f32>,
     smoothdelta: f32,
     //indices for creating new sticks
     newstickstart: Option<usize>,
@@ -100,7 +102,9 @@ struct Window
     //index to the point closest to the mouse
     closest_point: Option<usize>,
 
+
     points: Vec<Point>,
+    orphans: Vec<usize>,
     //write buffer
     sticks: Vec<Stick>,
     // ^

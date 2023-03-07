@@ -1,10 +1,9 @@
 pub use web_audio_api::context::{AudioContext, BaseAudioContext};
 pub use web_audio_api::node::{AudioNode, AudioScheduledSourceNode};
 
-
-//TODO: Change everything about this.
 impl crate::Window
 {
+    #[inline(never)]
     pub fn play_sfx(&mut self)
     {
         let mut buffer = self.context.create_buffer(
@@ -34,10 +33,12 @@ impl crate::Window
     }
 }
 
+#[inline(never)]
 pub fn generate_ticks(data: &mut [f32], frequency: usize, length: usize)
 {
     for sample in data.iter_mut()
     {
+        //let r = fastrand::f32();
         *sample = 0.0;
     }
     let len = length;
@@ -46,7 +47,8 @@ pub fn generate_ticks(data: &mut [f32], frequency: usize, length: usize)
         for l in 0..len
         {
             let offset = f * (data.len() / frequency);
-            data[l.min(data.len() - offset - 1) + offset] = 0.7;
+            let r = fastrand::f32();
+            data[l.min(data.len() - offset - 1) + offset] = r * 0.5 + r.signum() * 0.5;
         }
     }
 }

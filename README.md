@@ -6,6 +6,11 @@ This is the newer, and more featureful version of the cloth sim.
 This video series helped a lot:
 https://youtu.be/3HjO_RGIjCU
 
+## Screenshots
+
+
+
+
 ## Controls:
 
 Hold LMB to do one of four things:
