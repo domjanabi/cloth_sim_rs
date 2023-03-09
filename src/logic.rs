@@ -159,7 +159,7 @@ impl crate::Window
         }
         if pge.get_key(olc::Key::G).pressed
         {
-            self.generate_grid(64, 6.0);
+            self.generate_grid(32, 5.0);
         }
 
         if pge.get_key(olc::Key::Q).pressed
