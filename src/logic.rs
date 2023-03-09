@@ -34,7 +34,7 @@ impl crate::Window
     //used verlet integration for this
     //https://youtu.be/3HjO_RGIjCU
     // ^ very useful link
-    #[inline(never)]
+    
     pub fn simulate(
         &mut self,
         delta: f32,
@@ -94,7 +94,7 @@ impl crate::Window
         self.smoothdelta = (self.smoothdelta + elapsed_time * 0.1) / 1.1;
     }
 
-    #[inline(never)]
+    
     pub fn handle_input(&mut self, pge: &mut olc::PixelGameEngine)
     {
         if !((self.currentmode == Mode::Hand) && pge.get_mouse(0).held)
@@ -249,7 +249,7 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     //generates a grid that acts like cloth
     pub fn generate_grid(&mut self, dim: u32, stepsize: f32) // 20.0
     {
@@ -308,7 +308,7 @@ impl crate::Window
     }
 
     //snaps all sticks that become too long
-    #[inline(never)]
+    
     pub fn snap_apart_too_long_sticks(&mut self)
     {
         assert!(self.orphans.is_empty());
@@ -333,7 +333,7 @@ impl crate::Window
         self.delete_orphan_points();
     }
 
-    #[inline(never)]
+    
     pub fn delete_orphan_points(&mut self)
     {
         let mut i = 0;
@@ -349,7 +349,7 @@ impl crate::Window
             };
             if remove
             {
-                if self.points.len() == 0
+                if self.points.is_empty()
                 {
                     return;
                 }
@@ -395,7 +395,7 @@ impl crate::Window
         self.orphans.clear();
     }
 
-    #[inline(never)]
+    
     //bounces the points off the window borders
     pub fn constrain_points(&mut self, pge: &mut olc::PixelGameEngine)
     {
@@ -433,7 +433,7 @@ impl crate::Window
         );
     }
 
-    #[inline(never)]
+    
     //gets the distance between a line segment (aka Stick), and a point
     pub fn distance(&self, st: Stick, pt: Vec2<f32>) -> f32
     {
@@ -451,7 +451,7 @@ impl crate::Window
         (pt - projection).magnitude()
     }
 
-    #[inline(never)]
+    
     //returns whether two line segments intersect or not
     pub fn intersects(start1: Vec2<f32>, end1: Vec2<f32>, start2: Vec2<f32>, end2: Vec2<f32>) -> bool
     {
@@ -495,7 +495,7 @@ impl crate::Window
         true
     }
 
-    #[inline(never)]
+    
     //-1 when no points exist
     pub fn get_closest_point(&mut self, x: f32, y: f32) -> Option<usize>
     {
@@ -528,7 +528,7 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     //can leave orphan points that bounce around
     pub fn cut_sticks(&mut self, pge: &mut olc::PixelGameEngine)
     {
@@ -564,8 +564,8 @@ impl crate::Window
                 //moves points a bit when cutting them apart
                 let vel = self.points[self.sticks[i].end].pos - self.points[self.sticks[i].end].prev;
                 let relative_vel = mouse_delta - vel;
-                self.points[self.sticks[i].start].pos += relative_vel.normalized() / relative_vel.magnitude_squared().max(1.0).min(30.0) * 10.0;
-                self.points[self.sticks[i].end].pos += relative_vel.normalized() / relative_vel.magnitude_squared().max(1.0).min(30.0) * 10.0;
+                self.points[self.sticks[i].start].pos += relative_vel.normalized() / relative_vel.magnitude_squared().clamp(1.0, 30.0) * 10.0;
+                self.points[self.sticks[i].end].pos += relative_vel.normalized() / relative_vel.magnitude_squared().clamp(1.0, 30.0) * 10.0;
                 if relative_vel.magnitude_squared() > 9.0
                 {
                     let dot_indices = self.remove_stick(i);
@@ -597,7 +597,7 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     pub fn apply_force(&mut self, pge: &mut olc::PixelGameEngine)
     {
         if pge.get_mouse(0).held
@@ -646,11 +646,11 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     pub fn remove_stick(&mut self, index: usize) -> (usize, usize)
     {
         let stick = self.sticks.swap_remove(index);
-        let stick2 = self.stickscopy.swap_remove(index);
+        self.stickscopy.swap_remove(index);
         self.points[stick.start].connection_count -= 1;
         self.points[stick.end].connection_count -= 1;
         (stick.start, stick.end)

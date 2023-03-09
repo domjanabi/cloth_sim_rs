@@ -4,7 +4,7 @@ use olc_pge as olc;
 
 impl crate::Window
 {
-    #[inline(never)]
+    
     pub fn render(&mut self, pge: &mut olc::PixelGameEngine)
     {
         pge.clear(olc::Pixel::rgb(33, 36, 30));
@@ -55,7 +55,7 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     pub fn render_points(&mut self, pge: &mut olc::PixelGameEngine)
     {
         for i in 0..self.points.len()
@@ -72,7 +72,7 @@ impl crate::Window
         }
     }
 
-    #[inline(never)]
+    
     pub fn render_sticks(&self, pge: &mut olc::PixelGameEngine)
     {
         for stick in self.sticks.iter()
@@ -86,7 +86,7 @@ impl crate::Window
             );
         }
     }
-    #[inline(never)]
+    
     pub fn fill_circle(
         x: f32,
         y: f32,

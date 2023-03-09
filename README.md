@@ -7,6 +7,11 @@ This video series helped a lot:
 https://youtu.be/3HjO_RGIjCU
 
 ## Screenshots
+![cloth](./s1.png)
+![cutting](./s2.png)
+![generating connections](./s3.png)
+![force mode](./s4.png)
+![hand mode](./s5.png)
 
 
 

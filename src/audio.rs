@@ -3,7 +3,6 @@ pub use web_audio_api::node::{AudioNode, AudioScheduledSourceNode};
 
 impl crate::Window
 {
-    #[inline(never)]
     pub fn play_sfx(&mut self)
     {
         let mut buffer = self.context.create_buffer(
@@ -33,7 +32,6 @@ impl crate::Window
     }
 }
 
-#[inline(never)]
 pub fn generate_ticks(data: &mut [f32], frequency: usize, length: usize)
 {
     for sample in data.iter_mut()
